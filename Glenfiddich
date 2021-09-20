@@ -1,0 +1,81 @@
+import requests
+from bs4 import BeautifulSoup
+from selenium import webdriver
+import time
+from openpyxl import Workbook, load_workbook
+import pandas as pd
+
+from webdriver_manager.chrome import ChromeDriverManager
+browser = webdriver.Chrome(ChromeDriverManager().install())
+
+def webscrape_shopee_glenfiddich_18():
+    global check_litre
+    global count
+    global page
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Data"
+    ws.append(["Serial Number", "Price", "Mililitres", "Link"])
+    wb.save('Glenfiddich 18 data.xlsx')
+
+    url = "https://www.lazada.sg/catalog/?_keyori=ss&from=input&page=1&q=glenfiddich%2018&spm=a2o42.searchlist.search.go.1c4e221fu9ZyOv"
+    page = requests.get(url)
+    browser.get(url)
+    if page.status_code == 200:
+        #Above 18 button (turns out it wasn't necessary for the code to run)
+        #browser.find_element_by_xpath("/html/body/div[4]/div/div[2]/div/div[2]/div/div/div[2]/button[1]/span").click()
+        count = 0
+        page_count = 1
+        main_scraping_code()
+        time.sleep(1)
+        exit = False
+        while exit == False:
+            page_count += 1
+            try:
+                browser.find_element_by_xpath("/html/body/div[3]/div/div[2]/div[1]/div/div[1]/div[4]/div/ul/li[5]")
+                new_url = url.replace("page=1", f"page={str(page_count)}")
+                page = requests.get(new_url)
+                browser.get(new_url)
+                time.sleep(1)
+                main_scraping_code()
+            except:
+                print("All scrapped")
+                exit = True
+
+    else:
+        print(f"Website not available: {page.status_code}")
+
+def main_scraping_code():
+    global page
+    global count
+
+    soup = BeautifulSoup(browser.page_source, "html.parser")
+    items = soup.find_all("div", class_="_3VkVO")
+    for whiskey in items:
+        description = whiskey.find("div", class_="_8JShU")
+        name = description.text.strip()
+        if "18" in name:
+            count += 1
+            check_litre = None
+            words = name.split(" ")
+            for word in words:
+                if "ml" == word[len(word) - 2:] or "cl" == word[len(word) - 2:]:
+                    check_litre = word
+            link = whiskey.find("a", href=True)
+            price = whiskey.find("span", class_="Q78Jz").text
+            print(f"#{count}")
+            print(f"Price: {price}")
+            if check_litre == None:
+                check_litre = "N.A."
+            print(f"Mililitre: {check_litre}")
+            print(f"Link: {'https://' + link['href'][2:]}")
+            print()
+            wb = load_workbook('Glenfiddich 18 data.xlsx')
+            ws = wb.active
+            ws.append([count, price, check_litre, 'https://' + link['href'][2:]])
+            wb.save('Glenfiddich 18 data.xlsx')
+        else:
+            continue
+
+webscrape_shopee_glenfiddich_18()
